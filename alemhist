@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# You can place this file in ~/.local/bin and make it executable with chmod +x ~/.local/bin/alemhist
+# Alternatively, you can make an alias in your .bashrc or .bash_aliases with the alias command
+
+# Personnalize this command :
+# - set the path where the alemhist.py script is located
+# - add or remove alembic history options -i and -r (see alembic history --help)
+# - add or remove alemhist.py option --color
+# - more can be replace by less (with -R option to enable colors)
+# Warning: do not use alembic history --verbose, as alemhist.py is unable to parse it
+
+alembic history --indicate-current | python3 ~/alemhist/alemhist.py --color | more
