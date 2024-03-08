@@ -5,9 +5,8 @@
 
 # Personnalize this command :
 # - set the path where the alemhist.py script is located
-# - add or remove alembic history options -i and -r (see alembic history --help)
-# - add or remove alemhist.py option --color
-# - more can be replace by less (with -R option to enable colors)
-# Warning: do not use alembic history --verbose, as alemhist.py is unable to parse it
+# - add alemhist.py options --no-color, --max-count and --reverse
+# - change less options, replace it by more or remove it completely
+# Warning: using -v and -r options on alembic history may make alemhist crash
 
-alembic history --indicate-current | python3 ~/alemhist/alemhist.py --color | more
+alembic history --indicate-current | python3 ~/alemhist/alemhist.py --color $@ | less --RAW-CONTROL-CHARS --no-init --quit-if-one-screen

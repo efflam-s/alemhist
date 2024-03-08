@@ -3,9 +3,17 @@
 
 from __future__ import annotations
 from io import TextIOBase
-from typing import Iterable, Mapping
-from colorama import Fore, Style
+import re
 import sys
+from typing import Iterable, Mapping
+
+try:
+	from colorama import Fore, Style
+except ImportError:
+	class ContainsEmtyStr:
+		def __getattribute__(self, _: str) -> str:
+			return ""
+	Fore = Style = ContainsEmtyStr()
 
 use_colors = False
 
@@ -13,16 +21,35 @@ def main(argv: list[str]):
 	argv.pop(0)
 
 	global use_colors
-	if "--color" in argv:
-		use_colors = True
-		argv.remove("--color")
+	file_name = None
+	max_count = None
+	reverse = False
+	for param in argv:
+		if param == "--color":
+			use_colors = True
+		elif param == "--no-color":
+			use_colors = False
+		elif re.match(r"^-[0-9]+$", param):
+			max_count = int(param[1:])
+		elif re.match(r"^--max-count=[0-9]+$", param):
+			max_count = int(param[len("--max-count="):])
+		elif param == "--reverse":
+			reverse = True
+		else:
+			file_name = param
 
 	stream = sys.stdin
-	if len(argv) >= 1:
-		stream = open(argv[0], "r")
+	if file_name is not None:
+		stream = open(file_name, "r")
 
 	graph, order = parse_graph(stream)
-	visu = text_graph_visu(graph, order)
+
+	if reverse:
+		for node in graph.values():
+			node.preds, node.succs = node.succs, node.preds
+		order = list(reversed(order))
+
+	visu = text_graph_visu(graph, order, max_count)
 	print(visu)
 
 
@@ -44,8 +71,8 @@ def build_label(id_: str, tags: Iterable[str], label: str):
 def parse_graph(readable_text_stream: TextIOBase) -> tuple[dict[str, Node], list[str]]:
 	""" Get an alembic history from a stream and parse it to extract the DAG and
 	the child -> parent order """
-	order = []
-	graph = {}
+	order: list[str] = []
+	graph: dict[str, Node] = {}
 
 	with readable_text_stream as stream:
 		for line in stream.readlines():
@@ -67,8 +94,7 @@ def parse_graph(readable_text_stream: TextIOBase) -> tuple[dict[str, Node], list
 			order.append(id_)
 
 	# Compute successors
-	for node_id in order:
-		node = graph[node_id]
+	for node_id, node in graph.items():
 		for pred in node.preds:
 			if pred in graph and node_id not in graph[pred].succs:
 				graph[pred].succs.append(node_id)
@@ -84,7 +110,7 @@ def color_by_column(s: str, column: int):
 	color = COLORS[column % len(COLORS)]
 	return color + s + Style.RESET_ALL
 
-def text_graph_visu(graph: Mapping[str, Node], order: list[str]):
+def text_graph_visu(graph: Mapping[str, Node], order: list[str], max_count: int|None=None):
 	""" Vizalualize the given DAG into a text-based representation """
 	lines: list[str] = []
 	node_column: dict[str, int] = {}
@@ -104,7 +130,7 @@ def text_graph_visu(graph: Mapping[str, Node], order: list[str]):
 				return col
 		return nb_col
 
-	for node_id in reversed(order):
+	for i, node_id in enumerate(reversed(order)):
 		preds = graph[node_id].preds
 
 		for pred in preds:
@@ -135,17 +161,18 @@ def text_graph_visu(graph: Mapping[str, Node], order: list[str]):
 				quad_line[node_column[pred]][3] = color_by_column("\\", node_column[pred])
 		quad_line[current_column][0] = "*"
 
-		# Insert current line and node's label in lines list
-		top_line = (quad_line[i][1] + quad_line[i][0] for i in range(nb_col))
-		top_line = "".join(top_line).rstrip()
-		bot_line = (quad_line[i][3] + quad_line[i][2] for i in range(nb_col))
-		bot_line = "".join(bot_line).rstrip()
-		top_line += " " + graph[node_id].label
-		if all(c[3] == " " for c in quad_line):
-			# If bot_line only contains vertical bars and spaces, skip it
-			lines.append(top_line)
-		else:
-			lines += [bot_line, top_line]
+		if max_count is None or i >= len(order) - max_count:
+			# Insert current line and node's label in lines list
+			top_line = (quad_line[i][1] + quad_line[i][0] for i in range(nb_col))
+			top_line = "".join(top_line).rstrip()
+			bot_line = (quad_line[i][3] + quad_line[i][2] for i in range(nb_col))
+			bot_line = "".join(bot_line).rstrip()
+			top_line += " " + graph[node_id].label
+			if all(c[3] == " " for c in quad_line):
+				# If bot_line only contains vertical bars and spaces, skip it
+				lines.append(top_line)
+			else:
+				lines += [bot_line, top_line]
 
 		# Update remainings for next row
 		for pred in preds:
