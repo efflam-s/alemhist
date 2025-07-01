@@ -1,0 +1,25 @@
+#!/bin/bash
+
+for rev in $*; do
+    if [[ ! $rev =~ [0-9a-f]{12} ]]; then
+        echo 'Usage: ale reindex <revision> [...]'
+        echo 'revision: hash of the revision or revisions to reindex'
+        exit 1
+    fi
+done
+
+# Find setter for script_location in file alembic.ini, and execute it
+source <(grep script_location alembic.ini | sed 's/ *= */=/g')
+
+for rev_id in $*; do
+    # Find an available revision hash
+    new_id=$rev_id
+    while [ -e $script_location/versions/$new_id*.py ]; do
+        new_id=`hexdump --no-squeezing --length 6 --format '/1 "%02x"' /dev/urandom`
+    done
+    # Change rev hash in file name and all revision scripts
+    echo "$rev_id => $new_id"
+    file_name=`ls $script_location/versions/$rev_id*.py`
+    mv $file_name ${file_name//$rev_id/$new_id}
+    sed -i -E "s/([Rr]evis.*)$rev_id/\1$new_id/g" $script_location/versions/*.py
+done
